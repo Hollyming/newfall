@@ -49,7 +49,7 @@ if __name__ == "__main__":
     standup=0
     vy = 0
     center = [0, 0]
-    cbk = 2
+    cbk = 1
     waving = 0
 
     spd = CalMeanSpeed(rx= -30)
