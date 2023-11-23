@@ -57,7 +57,7 @@ if __name__ == "__main__":
     bgflag=True
     last_center = np.array([0,0])
     denoise_kernelo = np.ones((3, 3), np.uint8)
-    mog = cv2.createBackgroundSubtractorMOG2(detectShadows=False)
+    mog = cv2.createBackgroundSubtractorMOG2(detectShadows=False)#mog背景减除器
 
     # set tof initial parameters
     tof_cam_idx = 0
@@ -84,67 +84,72 @@ if __name__ == "__main__":
 
     while (1):
         # get raw frame
-        ret, raw_frame = dev.read()
-        if not ret:
+        ret, raw_frame = dev.read()     #获取当前帧深度图和红外图（存在raw_frame中）
+        if not ret:                     #若获取失败，则等待0.1s
             time.sleep(0.1)
             continue
 
         dep_ir_frame = np.frombuffer(raw_frame, dtype=np.uint16).reshape(480, 1280)
+        #将获取的深度图和红外图转换为numpy数组,dep_ir_frame.shape = (480, 1280)
         depth, ir = dep_ir_frame[:, 0::2], dep_ir_frame[:, 1::2]
+        #depth选取偶数列切片，ir选取奇数列切片；depth.shape = (480, 640), ir.shape = (480, 640)
 
         # fall detection module
-        img_dep = cv2.resize(depth, (320, 240))
+        img_dep = cv2.resize(depth, (320, 240)) #放缩为320*240，img_dep.shape = (240, 320)
         img_ir = cv2.resize(ir, (320, 240))
-        dep_ori_copy = depth.copy()
-        bg_copy = depth.copy()
+        dep_ori_copy = depth.copy()             #深度图的原始拷贝，用于计算速度，dep_ori_copy.shape = (480, 640)
+        bg_copy = depth.copy()                  #深度图的原始拷贝，用于计算背景，bg_copy.shape = (480, 640)
 
-        if bgflag :
+        if bgflag :#获取背景
             dep_bg = img_dep
             ir_bg = img_ir
             cv2.imshow('bg',cv2.convertScaleAbs(img_dep, None, 1 / 16))
-        else:
-            vis_output = background
+        else:#背景未获取
+            vis_output = background #按b键获取背景后，vis_output为背景图
 
-            tofcap.tof_cap(img_dep,img_ir)
+            tofcap.tof_cap(img_dep,img_ir)#---
 
+            #nb: no background
             depnb = cv2.convertScaleAbs(img_dep, None, 1 / 16)
             depnb = cv2.merge([depnb] * 3)
 
-            img_amp = cv2.convertScaleAbs(img_ir, None, 1)
-            img_fall = cv2.convertScaleAbs(img_dep, None, 1 / 16)
+            img_amp = cv2.convertScaleAbs(img_ir, None, 1)          #强度图
+            img_fall = cv2.convertScaleAbs(img_dep, None, 1 / 16)   #深度图
 
-            img_move = mog.apply(img_fall)
-            img_move = cv2.morphologyEx(img_move, cv2.MORPH_OPEN, denoise_kernelo, iterations=2)
-            img_move = cv2.morphologyEx(img_move, cv2.MORPH_CLOSE, denoise_kernelo, iterations=2)
-            
-            img_fall = cv2.merge([img_fall] * 3)
-            img_fall = cv2.applyColorMap(img_fall, cv2.COLORMAP_RAINBOW)
-            panl = np.ones_like(img_fall,dtype = 'uint8')*255
+            img_move = mog.apply(img_fall)      #img_move为背景减除后的图像
+            img_move = cv2.morphologyEx(img_move, cv2.MORPH_OPEN, denoise_kernelo, iterations=2)#开运算去噪，iterations=2迭代2次，即进行2次开运算
+            img_move = cv2.morphologyEx(img_move, cv2.MORPH_CLOSE, denoise_kernelo, iterations=2)#闭运算去噪，iterations=2迭代2次，即进行2次闭运算
+            #同时进行开运算和闭运算，形态学梯度，可以得到有效的轮廓信息，img_move.shape = (240, 320)
+
+            img_fall = cv2.merge([img_fall] * 3)#img_fall.shape = (240, 320, 3)
+            img_fall = cv2.applyColorMap(img_fall, cv2.COLORMAP_RAINBOW)#applyColorMap()函数将灰度图转换为伪彩色图像
+            panl = np.ones_like(img_fall,dtype = 'uint8')*255#panl是白色背景图，用于显示文字，panl.shape = (240, 320, 3)，ones_like()函数返回一个和给定数组a相同shape的全1数组
 
             # remove the background and calculate cbk
             if dep_bg is not None:
-                img_dep[np.abs(img_ir.copy() - ir_bg) < 20] = 0
+                img_dep[np.abs(img_ir.copy() - ir_bg) < 20] = 0#将img_dep中img_ir与ir_bg差值小于20的像素位置置为0
 
             img_hand = hand_cut(img_dep=img_dep, img_amp=img_amp,
-                                amp_th=20,  # 红外图
-                                dmax=8000, dmin=500,  # 深度图
-                                # cutx=40, cuty=10  # 图像四周区域
+                                amp_th=20,  # 强度图过暗切除阈值
+                                dmax=8000, dmin=500,  # 深度图距离在500-8000mm之外的切除
+                                # cutx=40, cuty=10  # 图像四周切除区域，不设置阈值即为不生效
                                 )
-            img_hand = cv2.morphologyEx(img_hand, cv2.MORPH_OPEN, denoise_kernelo, iterations=2)
-            img_dep[img_hand == 0] = 0
+            img_hand = cv2.morphologyEx(img_hand, cv2.MORPH_OPEN, denoise_kernelo, iterations=2)#进行2次开运算
+            img_dep[img_hand == 0] = 0#将img_dep中img_hand为0的部分置为0
 
             _, markers, stats, centroids = cv2.connectedComponentsWithStats(img_hand)
+            #连通域标记，markers为标记图像，stats为每个连通域的信息，centroids为每个连通域的中心坐标
             area_th = 1500
             detflag = 0
             min_d = 20000
 
-            for i in range(1, len(stats)):
-                center = centroids[i].astype('int')
-                dd=transxy(center, dep_ori_copy)[0][2]
-                human_area = stats[i][4]*dd*dd
-                if human_area > area_th:
+            for i in range(1, len(stats)):              #stats[0]为背景（0的连通域），从1开始遍历所有连通域
+                center = centroids[i].astype('int')     #中心坐标
+                dd=transxy(center, dep_ori_copy)[0][2]  #计算中心点的深度值
+                human_area = stats[i][4]*dd*dd          #计算连通域的面积
+                if human_area > area_th:                #若连通域面积大于阈值，则判断为人体
                     detflag = 1
-                    hum_stat = stats[i]
+                    hum_stat = stats[i] 
                     # cv2.rectangle(depnb, (hum_stat[0], hum_stat[1]),
                     #             (hum_stat[0] + hum_stat[2], hum_stat[1] + hum_stat[3]), color=[0, 255, 0],
                     #             thickness=2)

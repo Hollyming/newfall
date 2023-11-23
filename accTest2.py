@@ -216,8 +216,8 @@ for file_name in os.listdir(data_path1):
             
             #主要跌倒判断算法
             if datum.poseKeypoints is not None:
-                for i in range(datum.poseKeypoints.shape[0]):
-                    skel = datum.poseKeypoints[i,:15,:2].astype(np.int32)#skel（15，2）
+                for j in range(datum.poseKeypoints.shape[0]):#datum.poseKeypoints.shape[0]为人数
+                    skel = datum.poseKeypoints[j,:15,:2].astype(np.int32)#skel（15，2）
                     posfeet = np.zeros(2)
                     foot_num = 0
                     for joint in [10, 13]:  # 10:左膝 13:右膝

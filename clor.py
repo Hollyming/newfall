@@ -263,6 +263,7 @@ def hand_cut(img_dep=[], img_amp=[], dmin=-1, dmax=-1, amp_th=-1, cutx=0, cuty=0
     :param dmin,dmax,amp_th 若<0则表示无效
     :return: mask_out
     """
+    #掩码初始化（无数据全白，有数据copy）
     mask_out = np.ones_like(img_dep, 'uint8') if len(mask) == 0 else mask.copy()
 
     # 切除过暗的像素
@@ -274,11 +275,11 @@ def hand_cut(img_dep=[], img_amp=[], dmin=-1, dmax=-1, amp_th=-1, cutx=0, cuty=0
 
     # 切除图像四周区域
     if cutx > 0:
-        mask_out[:, :cutx] = 0
-        mask_out[:, -cutx:] = 0
+        mask_out[:, :cutx] = 0      #切除左边
+        mask_out[:, -cutx:] = 0     #切除右边
     if cuty > 0:
-        mask_out[:cuty, :] = 0
-        mask_out[-cuty:, :] = 0
+        mask_out[:cuty, :] = 0      #切除上边
+        mask_out[-cuty:, :] = 0     #切除下边
 
     return mask_out
 
